@@ -172,12 +172,11 @@ int main(int argc, char* argv[]) {
                     char* outstring[outindex - 1];
                     for(int i = 0; i < outindex - 1; i++) {
                         outstring[i] = string[i];
-                        printf("%s\n", outstring[i]);
                     } //for
                     outstring[outindex - 1] = NULL;
-                    int du = dup2(output, STDOUT_FILENO);
-//                    LaunchProcess(outstring);
-                    printf("%d\n", du);
+                    dup2(output, STDOUT_FILENO);
+                    close(output);
+                    LaunchProcess(outstring);
 
               } //if
             } else {
