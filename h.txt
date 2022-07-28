@@ -1,0 +1,10 @@
+NAME = shell
+FLAGS = -Wall -pedantic-errors
+cl: $(NAME).c
+	gcc -lm -o $(NAME) $(FLAGS) $(NAME).c
+run: cl
+	./$(NAME)
+clean:
+	rm -f $(NAME)
+1
+1730sh:~/cs1730/Gaude-Gavin-Chitgopkar-Siddhi-p3$ 

@@ -3,10 +3,11 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <fcntl.h>
 
 #define BUFFSIZE 100
 
-int LaunchProcess(char* string[]){
+int LaunchProcess(char* string[]) {
     int ex;
     pid_t pid;
     if ((pid = fork()) < 0) { // error
@@ -23,68 +24,71 @@ int LaunchProcess(char* string[]){
 } //LaunchProcess
 
 
-int ChangeDir(char* string[]) {
-    if (string[1] == NULL) {
+int ChangeDir(char* string[], int count) {
+    if (count == 1) {
         chdir("..");
-        chdir("..");
-    } //if
-    const char* elemone = string[1];
-    if (strcmp(elemone, ".") == 0) {
-        return 0;
-    } else if (strcmp(elemone, "..") == 0) {
         chdir("..");
     } else {
-        chdir(elemone);
+        const char* elemone = string[1];
+        if (strcmp(elemone, ".") == 0) {
+            return 0;
+        } else if (strcmp(elemone, "..") == 0) {
+            chdir("..");
+        } else if (strcmp(elemone, "~") == 0) {
+            chdir(getenv("HOME"));
+        } else {
+            if (chdir(elemone) == -1) {
+                perror(string[1]);
+            } else {
+                chdir(elemone);
+            } //else
+        } //else
     } //else
     return 1;
 } //ChangeDir
 
 int main(int argc, char* argv[]) {
-    const char* homedir = getenv("HOME");
-    chdir(homedir);
-
-    char* string[120];
+    const char* homedir = getenv("HOME"); //homedirectory set
+    chdir(homedir); //changes to the home directory when the program is executed
     int n;
     int c = 0;
-    int flag = 0;
-    char path[BUFFSIZE];
+    int flag = 0; //flag that tells how long to keep asking the user for args
+    char path[BUFFSIZE]; //declares path
 
-
-
+    //calculates how long the home directory is
     while (homedir[c] != '\0') {
         c = c + 1;
     } //while
 
-
-
     while (flag != 1) {
-        getcwd(path, BUFFSIZE);
+        char* string[120]; //array that holds the user inputted args
+        int count = 0;
+        getcwd(path, BUFFSIZE); //sets path to the cwd
         printf("1730sh:");
-//        int count = 0;
         int numspaces = 0;
         char* buf = malloc(BUFFSIZE);
         setbuf(stdout, NULL);
 
-        //change so it works if it includes the home directory
+        //prints out the appropriate prompt based on the pwd and user input
         if (strcmp(path, (getenv("HOME"))) == 0 ) {
             printf("~");
         } else {
             char* ret = strstr(path, (getenv("HOME")));
             if (ret) {
                 printf("~");
-                while (path[c] != '\0') {
-                    printf("%c", path[c]);
-                    c++;
+                int tempc = c;
+                while (path[tempc] != '\0') {
+                    printf("%c", path[tempc]);
+                    tempc++;
                 } //while
             } else {
                 printf("%s", path);
             } //else
-// char *token = strtok(path, getenv("HOME"));
-            //printf(token);
         } //else
 
         printf("$ ");
 
+        //counts to see how many spaces there are
         if ((n = read(STDIN_FILENO, buf, BUFFSIZE)) > 0) {
             //counts how many spaces there are
             for (int i = 0; i < n; i++) {
@@ -94,39 +98,97 @@ int main(int argc, char* argv[]) {
             } //for
         } //if
 
+        //the deliminator that is being used to separate the workds
         const char delim[3] = " \n";
 
+        //token to help with deliminating the strings
         char * token = strtok(buf, delim);
 
         //delim the string of args the user has inputted
-        int count = 0;
-        while(token != NULL ) {
+        for (int i = 0; i <= numspaces; i++) {
             (string[count]) = token;
+            if (string[0] == NULL) {
+                break;
+            } //if
             count++;
             token = strtok(NULL, delim);
-        } //while
-        (string[numspaces + 1]) = NULL;
+        } //for
+        if (string[0] == NULL);
+        else {
+            (string[count]) = NULL;
 
-        if (strcmp(string[0], "exit") == 0 ) {
-            free(buf);
-            exit(0);
-        } //if
 
-        if (strcmp(string[0], "cd") == 0) {
-            ChangeDir(string);
-        } else {
-            LaunchProcess(string);
+            //variables to check for redirection
+            int in = 0;
+            int out = 0;
+            int doublein = 0;
+            int doubleout = 0;
+
+            int inindex = 0;
+            int outindex = 0;
+            int doubleinindex = 0;
+            int doubleoutindex = 0;
+
+
+            //checks to see if there are any and where the redirections are
+            for (int i = 0; i < count; i++) {
+                if (strcmp(string[i],"<") == 0) {
+                    in = 1;
+                    inindex = i + 1;
+                } //if
+                if (strcmp(string[i],">") == 0) {
+                    out = 1;
+                    outindex = i + 1;
+                } //if
+                if (strcmp(string[i],"<<") == 0) {
+                    doublein = 1;
+                    doubleinindex = i + 1;
+                } //if
+                if (strcmp(string[i],">>") == 0) {
+                    doubleout = 1;
+                    doubleoutindex = i + 1;
+                } //if
+            } //for
+
+            //checks to see if there is a redirection in the arguments the user inputted
+            int redirectflag = 0;
+            if (doubleout == 1 || doublein == 1 || in == 1 || out == 1) {
+                redirectflag = 1;
+            } //if
+
+            if (count == 0);
+            else if (strcmp(string[0], "exit") == 0) {
+                free(buf);
+                exit(0);
+            } else if (strcmp(string[0], "cd") == 0) {
+                ChangeDir(string, count);
+            } else if (redirectflag == 1) {
+                if (in == 1) {
+                    int input = open(string[inindex], O_RDONLY);
+                    dup(input);
+                } //if
+                if (out == 1) {
+                    int output = creat(string[outindex], 0644);
+                    char* outstring[outindex - 1];
+                    for(int i = 0; i < outindex - 1; i++) {
+                        outstring[i] = string[i];
+                        printf("%s\n", outstring[i]);
+                    } //for
+                    outstring[outindex - 1] = NULL;
+                    int du = dup2(output, STDOUT_FILENO);
+//                    LaunchProcess(outstring);
+                    printf("%d\n", du);
+
+              } //if
+            } else {
+                LaunchProcess(string);
+            } //else
+            for (int i = 0; i < count; i++) {
+                if (string[i] != NULL) {
+                    string[i] = NULL;
+                } // if
+            } //for
         } //else
-/*
-        //for loop to go through all elements
-        //if statement to see if one of then has a <
-        int fdinput = open("input.txt", O_RDONLY);
-        dup2(fdi, STDIN_FILENO);
-        // could also use O_APPEND instead of O_TRUNC, as needed
-        int fdoutput = open("output.txt", O_WRONLY | O_CREAT | O_TRUNC, 0644);
-        dup2(fdo, STDOUT_FILENO);
-*/
-
         free(buf);
     } //while
     return EXIT_SUCCESS;
